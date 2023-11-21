@@ -1,5 +1,6 @@
 # main.py
 import pygame
+import serial  # Import the pyserial library
 from tank import Tank, draw_tube, draw_bomb
 
 # Initialize Pygame
@@ -31,6 +32,18 @@ button_reference_levels = ["Empty", "Low", "Medium", "High", "Full"]
 # Font setup for button labels
 font = pygame.font.Font(None, 24)
 
+# Serial communication setup
+ser = serial.Serial('COM1', 9600)  # Replace 'COM1' with the actual serial port
+
+# Dictionary to map button index to binary message
+button_to_binary = {
+    0: '0000000000',  # Empty
+    1: '0000110010',  # Low
+    2: '0001100100',  # Medium
+    3: '0010011000',  # High
+    4: '0011010101',  # Full
+}
+
 # Main game loop
 running = True
 while running:
@@ -49,6 +62,12 @@ while running:
                     # Set the exact water level based on the button clicked
                     tank1.update_water_level(water_levels[i])
                     tank2.update_water_level(tank2.height - water_levels[i])  # Set tank 2 based on the complementary amount
+
+                    # Get the binary message from the dictionary
+                    binary_data = button_to_binary.get(i, '0000000000')
+                    
+                    # Send the binary data to the hardware
+                    ser.write(binary_data.encode())
 
     # Draw tanks
     tank1.draw(screen)
@@ -71,6 +90,9 @@ while running:
         screen.blit(label, label_rect)
 
     pygame.display.flip()
+
+# Close the serial port
+ser.close()
 
 # Quit Pygame
 pygame.quit()

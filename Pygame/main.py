@@ -44,6 +44,9 @@ button_to_binary = {
     4: '0011010101',  # Full
 }
 
+# Variable to store the index of the selected button
+selected_button = None
+
 # Main game loop
 running = True
 while running:
@@ -65,9 +68,12 @@ while running:
 
                     # Get the binary message from the dictionary
                     binary_data = button_to_binary.get(i, '0000000000')
-                    
+
                     # Send the binary data to the hardware
                     ser.write(binary_data.encode())
+
+                    # Update the selected button
+                    selected_button = i
 
     # Draw tanks
     tank1.draw(screen)
@@ -79,9 +85,10 @@ while running:
     # Draw bomb
     draw_bomb(screen, bomb_position[0], bomb_position[1], radius=15)
 
-    # Draw round buttons with labels
+    # Draw round buttons with labels and highlight the selected button
     for i, pos in enumerate(button_positions):
-        pygame.draw.circle(screen, (0, 128, 0), pos, button_radius)
+        color = (0, 128, 0) if i != selected_button else (0, 255, 0)  # Highlight the selected button with a different color
+        pygame.draw.circle(screen, color, pos, button_radius)
         pygame.draw.circle(screen, (0, 0, 0), pos, button_radius, 2)
         
         # Draw button labels

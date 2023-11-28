@@ -1,6 +1,7 @@
-# main.py
 import pygame
 import serial
+import threading
+from queue import Queue
 from tank import Tank
 
 # Initialize Pygame
@@ -44,7 +45,6 @@ slider_to_binary = {
     "Empty": '0',
 }
 
-
 # Function to draw the vertical slider with a dark blue ball indicator
 def draw_slider(screen):
     pygame.draw.rect(screen, (200, 200, 200), (slider_x, slider_y, slider_width, slider_height))
@@ -57,15 +57,37 @@ def draw_slider(screen):
     ball_y = slider_y + slider_pos
     pygame.draw.circle(screen, (0, 0, 128), (int(ball_x), int(ball_y)), ball_radius)
 
-
 # Update vertical slider value based on mouse position
 def update_slider(mouse_y):
     normalized_y = max(0, min(1, (mouse_y - slider_y) / slider_height))
     closest_level = min(range(len(slider_levels)), key=lambda y: abs(y - normalized_y * (len(slider_levels) - 1)))
     return slider_levels[closest_level]
 
+# Function to receive serial data in a separate thread
+def receive_serial(data_queue):
+    while True:
+        try:
+            if ser.is_open:
+                data = ser.read(9).decode('utf-8').strip()
+                if data:  # Check if data is not empty before putting it into the queue
+                    data_queue.put(data)
+                    print(f"Serial data: {data}")
+            else:
+                print("Serial port is not open.")
+        except BaseException as e:
+            print(e)
+        pygame.time.delay(100)  # Add a delay to avoid high CPU usage
+
+
+# Start the thread for receiving serial data
+data_queue = Queue()
+data_thread = threading.Thread(target=receive_serial, args=(data_queue,))
+data_thread.daemon = True
+data_thread.start()
+
 # Main game loop
 running = True
+received_data_array = []  # Array to store received serial data
 while running:
     screen.fill((255, 255, 255))
 
@@ -91,14 +113,6 @@ while running:
                 # Send the binary data to the hardware
                 ser.write(binary_data.encode())
 
-    # Ler dados da porta serial
-    if ser.in_waiting > 0:
-        serial_data = "1234"  # ser.readline().decode().strip()  # Lê uma linha da porta serial e decodifica
-        print(serial_data)
-
-        # Exibe os dados no canto superior direito
-        display_data(serial_data)
-
     # Draw vertical slider
     draw_slider(screen)
 
@@ -111,6 +125,16 @@ while running:
         # Move labels even more to the left
         label_rect = label.get_rect(midleft=(slider_x - 60 - 10 * (width / 800), slider_y + i * (slider_height / (len(slider_levels) - 1))))
         screen.blit(label, label_rect)
+
+   # Check if the data queue is not empty and pop data into the array
+    while not data_queue.empty():
+        received_data_array.append(data_queue.get_nowait())
+
+        # Print the received data array (you can modify this part as needed)
+    print("Received Data Array:", received_data_array)
+
+# Add a delay to avoid high CPU usage
+    pygame.time.delay(100)
 
     pygame.display.flip()
 

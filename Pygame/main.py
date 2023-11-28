@@ -69,21 +69,30 @@ def receive_serial(data_queue):
         try:
             if ser.is_open:
                 data = ser.read(9).decode('utf-8').strip()
-                if data:  # Check if data is not empty before putting it into the queue
-                    data_queue.put(data)
-                    print(f"Serial data: {data}")
+                data_queue.put(data)
+                print(f"Serial data: {data}")
             else:
                 print("Serial port is not open.")
         except BaseException as e:
             print(e)
         pygame.time.delay(100)  # Add a delay to avoid high CPU usage
 
-
 # Start the thread for receiving serial data
 data_queue = Queue()
 data_thread = threading.Thread(target=receive_serial, args=(data_queue,))
 data_thread.daemon = True
 data_thread.start()
+
+
+# Function to simulate receiving data in a separate thread, it is a mock up
+def simulate_receive_serial(mock_data_queue):
+    for data in ["100", "150", "200", "180", "250"]:
+        pygame.time.delay(300)
+        mock_data_queue.put(data)
+    mock_data_queue.put("")  # Add an empty string to simulate receiving an empty data
+
+# Create a mock queue
+mock_data_queue = Queue()
 
 # Main game loop
 running = True
@@ -103,20 +112,31 @@ while running:
                 # Update the slider value based on the mouse position
                 slider_value = update_slider(event.pos[1])
 
-                # Set the tank's water level
-                tank.update_water_level((len(slider_levels) - 1 - slider_levels.index(slider_value)) * 90)
-                # Assuming each level represents 50 units, and reversing the order
-
                 # Get the binary message from the dictionary
                 binary_data = slider_to_binary.get(slider_value, '0000000')
                 print(slider_value, binary_data, binary_data.encode())
                 # Send the binary data to the hardware
                 ser.write(binary_data.encode())
 
+  
+    #simulate_receive_serial(mock_data_queue)  #uncomment this line to use mock data
+
+
+    if not data_queue.empty(): 
+    # if not mock_data_queue.empty():  #uncomment this line to use mock data
+        data = data_queue.get()
+        #data = mock_data_queue.get() #uncomment this line to use mock data
+        if data:  # Only append non-empty data to the array
+            received_data_array.append(int(data))
+
     # Draw vertical slider
     draw_slider(screen)
 
-    # Draw tank (bigger in scale, moved to the left)
+    # Draw tank (bigger in scale, moved to the left) based on the last value in received_data_array
+    if received_data_array:
+        last_value = received_data_array[-1]
+        tank.update_water_level(last_value)  # Set the tank's water level based on the last value in the array
+
     tank.draw(screen)
 
     # Draw slider labels (moved even more to the left)
@@ -126,14 +146,9 @@ while running:
         label_rect = label.get_rect(midleft=(slider_x - 60 - 10 * (width / 800), slider_y + i * (slider_height / (len(slider_levels) - 1))))
         screen.blit(label, label_rect)
 
-   # Check if the data queue is not empty and pop data into the array
-    while not data_queue.empty():
-        received_data_array.append(data_queue.get_nowait())
-
-        # Print the received data array (you can modify this part as needed)
+    # Print the received data array (you can modify this part as needed)
     print("Received Data Array:", received_data_array)
 
-# Add a delay to avoid high CPU usage
     pygame.time.delay(100)
 
     pygame.display.flip()

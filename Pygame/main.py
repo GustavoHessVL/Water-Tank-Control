@@ -1,7 +1,7 @@
 # main.py
 import pygame
-import serial  # Import the pyserial library
-from tank import Tank, draw_tube, draw_bomb
+import serial
+from tank import Tank
 
 # Initialize Pygame
 pygame.init()
@@ -11,41 +11,58 @@ width, height = 800, 600
 screen = pygame.display.set_mode((width, height))
 pygame.display.set_caption("Tank Simulator")
 
-# Create tanks
-tank1 = Tank(100, 300, 200, 300, color=(0, 0, 128))  # Dark Blue
-tank2 = Tank(500, 300, 200, 300, color=(0, 0, 128))  # Dark Blue
-tank2.update_water_level(tank2.height)  # Set the second tank to start with full water
+# Create a single tank (bigger in scale, moved to the left)
+tank_width = 250  # Original width
+tank_height = 400  # Original height
+tank_x = 50  # Move it to the left
+tank_y = (height - tank_height) // 2  # Center vertically
 
-# Define tube and bomb positions
-tube_start = (tank1.x + tank1.width, tank1.y + tank1.height // 2)
-tube_end = (tank2.x, tank2.y + tank2.height // 2)
-bomb_position = ((tube_start[0] + tube_end[0]) // 2, (tube_start[1] + tube_end[1]) // 2)
+tank = Tank(tank_x, tank_y, tank_width, tank_height, color=(0, 0, 128))  # Dark Blue
 
-# Define button positions and water levels
-button_radius = 25
-button_positions = [(75, 25), (200, 25), (325, 25), (450, 25), (575, 25)]
-water_levels = [0, 50, 100, 150, 200]  # Define the exact amount of water for each button
+# Slider parameters
+slider_width = 20  # Make it vertical
+slider_height = 500  # Make it vertical
+slider_x = width - 100  # Place it on the right side
+slider_y = (height - slider_height) // 2  # Center the slider vertically
 
-# Define button reference levels
-button_reference_levels = ["Empty", "Low", "Medium", "High", "Full"]
+# Slider levels and corresponding values (reversed order)
+slider_levels = ["Full", "High", "Medium", "Low", "Empty"]
+slider_value = "Empty"
 
-# Font setup for button labels
+# Font setup for slider labels
 font = pygame.font.Font(None, 24)
 
 # Serial communication setup
-ser = serial.Serial('COM1', 9600)  # Replace 'COM1' with the actual serial port
+ser = serial.Serial('COM1', 115200, 7, 'O', 1, timeout=1)
 
-# Dictionary to map button index to binary message
-button_to_binary = {
-    0: '0000000000',  # Empty
-    1: '0000110010',  # Low
-    2: '0001100100',  # Medium
-    3: '0010011000',  # High
-    4: '0011010101',  # Full
+# Dictionary to map slider value to binary message
+slider_to_binary = {
+    "Full": '6',
+    "High": '5',
+    "Medium": '3',
+    "Low": '2',
+    "Empty": '0',
 }
 
-# Variable to store the index of the selected button
-selected_button = None
+
+# Function to draw the vertical slider with a dark blue ball indicator
+def draw_slider(screen):
+    pygame.draw.rect(screen, (200, 200, 200), (slider_x, slider_y, slider_width, slider_height))
+    slider_pos = slider_levels.index(slider_value)
+    slider_pos = int((slider_pos / (len(slider_levels) - 1)) * slider_height)
+
+    # Draw a dark blue ball indicator
+    ball_radius = 10  # Adjust the radius as needed
+    ball_x = slider_x + slider_width / 2
+    ball_y = slider_y + slider_pos
+    pygame.draw.circle(screen, (0, 0, 128), (int(ball_x), int(ball_y)), ball_radius)
+
+
+# Update vertical slider value based on mouse position
+def update_slider(mouse_y):
+    normalized_y = max(0, min(1, (mouse_y - slider_y) / slider_height))
+    closest_level = min(range(len(slider_levels)), key=lambda y: abs(y - normalized_y * (len(slider_levels) - 1)))
+    return slider_levels[closest_level]
 
 # Main game loop
 running = True
@@ -57,43 +74,42 @@ while running:
         if event.type == pygame.QUIT:
             running = False
         elif event.type == pygame.MOUSEBUTTONDOWN:
-            for i, pos in enumerate(button_positions):
-                if (
-                    pos[0] - button_radius < event.pos[0] < pos[0] + button_radius
-                    and pos[1] - button_radius < event.pos[1] < pos[1] + button_radius
-                ):
-                    # Set the exact water level based on the button clicked
-                    tank1.update_water_level(water_levels[i])
-                    tank2.update_water_level(tank2.height - water_levels[i])  # Set tank 2 based on the complementary amount
+            if (
+                slider_x - 5 < event.pos[0] < slider_x + slider_width + 5
+                and slider_y - 5 < event.pos[1] < slider_y + slider_height + 5
+            ):
+                # Update the slider value based on the mouse position
+                slider_value = update_slider(event.pos[1])
 
-                    # Get the binary message from the dictionary
-                    binary_data = button_to_binary.get(i, '0000000000')
+                # Set the tank's water level
+                tank.update_water_level((len(slider_levels) - 1 - slider_levels.index(slider_value)) * 90)
+                # Assuming each level represents 50 units, and reversing the order
 
-                    # Send the binary data to the hardware
-                    ser.write(binary_data.encode())
+                # Get the binary message from the dictionary
+                binary_data = slider_to_binary.get(slider_value, '0000000')
+                print(slider_value, binary_data, binary_data.encode())
+                # Send the binary data to the hardware
+                ser.write(binary_data.encode())
 
-                    # Update the selected button
-                    selected_button = i
+    # Ler dados da porta serial
+    if ser.in_waiting > 0:
+        serial_data = "1234"  # ser.readline().decode().strip()  # Lê uma linha da porta serial e decodifica
+        print(serial_data)
 
-    # Draw tanks
-    tank1.draw(screen)
-    tank2.draw(screen)
+        # Exibe os dados no canto superior direito
+        display_data(serial_data)
 
-    # Draw tube
-    draw_tube(screen, tube_start[0], tube_start[1], tube_end[0], tube_end[1])
+    # Draw vertical slider
+    draw_slider(screen)
 
-    # Draw bomb
-    draw_bomb(screen, bomb_position[0], bomb_position[1], radius=15)
+    # Draw tank (bigger in scale, moved to the left)
+    tank.draw(screen)
 
-    # Draw round buttons with labels and highlight the selected button
-    for i, pos in enumerate(button_positions):
-        color = (0, 128, 0) if i != selected_button else (0, 255, 0)  # Highlight the selected button with a different color
-        pygame.draw.circle(screen, color, pos, button_radius)
-        pygame.draw.circle(screen, (0, 0, 0), pos, button_radius, 2)
-        
-        # Draw button labels
-        label = font.render(button_reference_levels[i], True, (0, 0, 0))
-        label_rect = label.get_rect(center=(pos[0], pos[1] + button_radius + 15))
+    # Draw slider labels (moved even more to the left)
+    for i, level in enumerate(slider_levels):
+        label = font.render(level, True, (0, 0, 0))
+        # Move labels even more to the left
+        label_rect = label.get_rect(midleft=(slider_x - 60 - 10 * (width / 800), slider_y + i * (slider_height / (len(slider_levels) - 1))))
         screen.blit(label, label_rect)
 
     pygame.display.flip()
